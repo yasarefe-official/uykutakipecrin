@@ -1,7 +1,7 @@
 from flask import Flask, render_template, request, jsonify, send_from_directory
 from apscheduler.schedulers.background import BackgroundScheduler
 from pywebpush import webpush, WebPushException
-from vapid import Vapid
+from py_vapid import Vapid
 import logging
 import os
 import json
