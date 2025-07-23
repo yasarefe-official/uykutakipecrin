@@ -215,34 +215,56 @@
             }
         }
 
-        // Save wake-up record
-        function saveRecord() {
+        // Save wake-up record and notify server
+        async function saveRecord() {
             const hour = parseInt(document.getElementById('wakeupHour').value);
             const minute = parseInt(document.getElementById('wakeupMinute').value);
-            
-            if (isNaN(hour) || isNaN(minute) || hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+
+            if (isNaN(hour) || isNaN(minute) || hour < 0 || hour > 23 || minute < 0 > 59) {
                 alert('Lütfen geçerli bir saat girin (Saat: 0-23, Dakika: 0-59)');
                 return;
             }
-            
+
             const newRecord = {
                 id: Date.now(),
                 hour: hour,
                 minute: minute,
                 timestamp: new Date().toISOString()
             };
-            
+
             records = [newRecord];
             saveRecords();
-            
-            // Clear form
-            document.getElementById('wakeupHour').value = '';
-            document.getElementById('wakeupMinute').value = '';
-            
-            displayRecords();
-            updateTimeDifference();
-            
-            alert('Kaydedildi! 💖');
+
+            // Notify the server to schedule a notification
+            try {
+                const isDevMode = document.getElementById('devMode').checked;
+                const response = await fetch('/notify', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ devMode: isDevMode }),
+                });
+
+                if (!response.ok) {
+                    throw new Error('Sunucuya bildirim isteği gönderilemedi.');
+                }
+
+                const result = await response.json();
+                console.log('Server response:', result.message);
+                alert('Kaydedildi ve hatırlatıcı kuruldu! 💖');
+
+            } catch (error) {
+                console.error('Hata:', error);
+                alert('Kaydedildi ancak hatırlatıcı kurulamadı. Lütfen sunucu bağlantısını kontrol edin.');
+            } finally {
+                // Clear form
+                document.getElementById('wakeupHour').value = '';
+                document.getElementById('wakeupMinute').value = '';
+
+                displayRecords();
+                updateTimeDifference();
+            }
         }
     </script>
 </body>
