@@ -1,87 +1,12 @@
-from flask import Flask, render_template, request
-import requests
-from apscheduler.schedulers.background import BackgroundScheduler
-import logging
+from flask import Flask, render_template
 import os
-from datetime import datetime, timedelta
-
-# Set up basic logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 app = Flask(__name__)
-
-# ntfy.sh topic'inizi buraya girin. Gizli tutmak için ortam değişkeni kullanmak en iyisidir.
-NTFY_TOPIC = os.environ.get('NTFY_TOPIC', 'ecrinin-uyku-zamani-test')
-
-# Arka plan görevleri için zamanlayıcı
-scheduler = BackgroundScheduler(daemon=True)
-
-def send_notification():
-    """ntfy.sh'e bildirim gönderir."""
-    notification_url = f"https://ntfy.sh/{NTFY_TOPIC}"
-    logging.info(f"Bildirim gönderilmeye çalışılıyor: URL={notification_url}")
-    try:
-        response = requests.post(
-            notification_url,
-            data="Ecrin, uyku zamanı geldi! 😴 Hadi yatağa! 💖".encode('utf-8'),
-            headers={
-                "Title": "Uyku Zamanı Hatırlatıcısı",
-                "Priority": "high",
-                "Tags": "bed,moon"
-            }
-        )
-        # Sunucudan gelen yanıtı logla
-        logging.info(
-            f"'{NTFY_TOPIC}' konusuna bildirim gönderildi. "
-            f"Durum Kodu: {response.status_code}, Yanıt: {response.text}"
-        )
-        response.raise_for_status()  # HTTP 2xx dışında bir kod varsa hata fırlat
-    except requests.exceptions.RequestException as e:
-        logging.error(f"Bildirim gönderilirken ağ hatası oluştu: {e}")
-    except Exception as e:
-        logging.error(f"Bildirim gönderilirken beklenmedik bir hata oluştu: {e}")
 
 @app.route('/')
 def index():
     """Ana sayfayı, yani index.html'i sunar."""
     return render_template('index.html')
-
-@app.route('/notify', methods=['POST'])
-def notify():
-    """Bildirim zamanlamak için endpoint."""
-    data = request.get_json()
-    is_dev_mode = data.get('devMode', False)
-
-    # Geliştirici modunda 2 dakika, normal modda 3 saat (180 dakika) sonra
-    delay_minutes = 2 if is_dev_mode else 180
-
-    # Mevcut zamanlanmış görevleri temizle (varsa)
-    for job in scheduler.get_jobs():
-        if job.name == 'send_notification':
-            job.remove()
-            logging.info("Mevcut bildirim görevi iptal edildi.")
-
-    # Yeni bildirim görevini 'date' tetikleyicisi ile zamanla
-    run_date = datetime.now() + timedelta(minutes=delay_minutes)
-    scheduler.add_job(
-        send_notification,
-        trigger='date',
-        run_date=run_date,
-        id='timed_notification',
-        name='send_notification',
-        replace_existing=True
-    )
-
-    logging.info(f"Bildirim, çalışmak üzere {run_date.strftime('%Y-%m-%d %H:%M:%S')} tarihine zamanlandı.")
-    return {"status": "success", "message": f"Notification scheduled in {delay_minutes} minutes."}, 200
-
-def keep_alive():
-    """Uygulamayı uyanık tutmak için periyodik görev."""
-    logging.info("Keep-alive sinyali. Uygulama çalışıyor.")
-
-# Uygulama başladığında zamanlayıcıyı başlat
-scheduler.add_job(keep_alive, 'interval', minutes=5, id='keep_alive_job')
-scheduler.start()
 
 if __name__ == '__main__':
     # Render'ın beklediği gibi 0.0.0.0'da ve dinamik portta çalıştır.
