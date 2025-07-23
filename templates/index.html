@@ -31,6 +31,10 @@
                     <button id="askPermissionBtn" class="mt-2 bg-blue-500 hover:bg-blue-600 text-white text-sm py-2 px-3 rounded-lg transition duration-300">
                         İzin İste
                     </button>
+                     <p class="text-xs text-gray-600 mt-2">
+                        <i class="fas fa-info-circle mr-1"></i>
+                        Pop-up görmüyorsanız, adres çubuğunun sağındaki 🔕 simgesini kontrol edin.
+                    </p>
                 </div>
             </div>
         </div>
@@ -158,16 +162,29 @@
             }
         }
 
-        function askForNotificationPermission() {
-            Notification.requestPermission().then(permission => {
+        async function askForNotificationPermission() {
+            console.log("İzin isteme fonksiyonu başladı.");
+            try {
+                console.log("Notification.requestPermission çağrılmadan önce.");
+                const permission = await Notification.requestPermission();
+                console.log("İzin isteği sonucu:", permission);
+
                 if (permission === 'granted') {
+                    console.log("İzin verildi, arayüz güncelleniyor.");
                     permissionDiv.classList.add('hidden');
                     new Notification("Teşekkürler! 💖", {
                         body: "Bildirimler başarıyla etkinleştirildi.",
                         icon: "https://img.icons8.com/color/48/000000/filled-like.png"
                     });
+                } else {
+                    console.log("İzin verilmedi veya pop-up kapatıldı.");
+                    // İzin durumu 'denied' ise setup fonksiyonu zaten arayüzü güncelleyecektir.
+                    setupNotificationPermission();
                 }
-            });
+            } catch (error) {
+                console.error("Bildirim izni istenirken hata oluştu:", error);
+            }
+            console.log("İzin isteme fonksiyonu bitti.");
         }
 
         function showNotification() {
