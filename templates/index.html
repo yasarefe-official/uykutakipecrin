@@ -22,6 +22,19 @@
             <p class="text-xs text-gray-600 mt-1">Bu modda 3 saatlik süre 2 dakikaya düşürülür</p>
         </div>
 
+        <!-- Bildirim İzni Butonu -->
+        <div id="permissionDiv" class="mb-6 p-4 bg-blue-100 border-l-4 border-blue-500 rounded-lg">
+             <div class="flex items-center">
+                <i class="fas fa-bell text-blue-500 text-xl mr-3"></i>
+                <div>
+                    <p class="text-blue-700 font-semibold">Alarm ve Bildirimler için İzin Ver</p>
+                    <button id="askPermissionBtn" class="mt-2 bg-blue-500 hover:bg-blue-600 text-white text-sm py-2 px-3 rounded-lg transition duration-300">
+                        İzin İste
+                    </button>
+                </div>
+            </div>
+        </div>
+
         <!-- Uyarı Mesajı -->
         <div id="warningMessage" class="hidden mb-6 p-4 bg-red-100 border-l-4 border-red-500 rounded-lg">
             <div class="flex items-center">
@@ -54,7 +67,7 @@
                 
                 <button type="submit" 
                         class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition duration-300">
-                    <i class="fas fa-sun mr-2"></i>Uyandım! Kaydet
+                    <i class="fas fa-sun mr-2"></i>Uyandım! Alarmı Kur
                 </button>
             </form>
         </div>
@@ -79,11 +92,13 @@
     </div>
 
     <script>
-        // LocalStorage key
-        const STORAGE_KEY = 'ecrin_sleep_records';
+        // LocalStorage keys
+        const RECORDS_STORAGE_KEY = 'ecrin_sleep_records';
+        const DEV_MODE_KEY = 'ecrin_dev_mode';
 
         // Uygulama state
         let records = [];
+        let alarmTimeoutId = null;
 
         // DOM elementleri
         const form = document.getElementById('sleepForm');
@@ -93,146 +108,95 @@
         const warningMessage = document.getElementById('warningMessage');
         const timeDiffText = document.getElementById('timeDiffText');
         const devModeCheckbox = document.getElementById('devMode');
+        const permissionDiv = document.getElementById('permissionDiv');
+        const askPermissionBtn = document.getElementById('askPermissionBtn');
 
-        // LocalStorage'den ayarları yükle ve olayları bağla
+        // Alarm Sesi
+        const alarmSound = new Audio('https://assets.mixkit.co/sfx/preview/mixkit-alarm-digital-clock-beep-989.mp3');
+        alarmSound.loop = true;
+
+        // -- Event Listeners ve Başlangıç Fonksiyonları --
+
         document.addEventListener('DOMContentLoaded', () => {
-            // Geliştirici modu durumunu yükle
-            const savedDevMode = localStorage.getItem('devMode');
-            if (savedDevMode !== null) {
-                devModeCheckbox.checked = JSON.parse(savedDevMode);
-            }
-
-            // Geliştirici modu durumunu kaydet
-            devModeCheckbox.addEventListener('change', () => {
-                localStorage.setItem('devMode', devModeCheckbox.checked);
-            });
-
+            // Ayarları ve kayıtları yükle
+            loadDevMode();
             loadRecords();
             displayRecords();
+            setupNotificationPermission();
+
+            // Periyodik güncellemeler
             updateTimeDifference();
             setInterval(updateTimeDifference, 1000);
+
+            // Olay dinleyicilerini bağla
+            devModeCheckbox.addEventListener('change', saveDevMode);
+            form.addEventListener('submit', handleFormSubmit);
+            askPermissionBtn.addEventListener('click', askForNotificationPermission);
         });
 
-        // Form submit
-        form.addEventListener('submit', (e) => {
-            e.preventDefault();
-            saveRecord();
-        });
+        // -- Bildirim ve İzin Fonksiyonları --
 
-        // Kayıt yükleme
-        function loadRecords() {
-            const stored = localStorage.getItem(STORAGE_KEY);
-            records = stored ? JSON.parse(stored) : [];
-        }
-
-        // Kayıt kaydetme
-        function saveRecords() {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
-        }
-
-        // Şu anki saati input'lara yazdırma
-        function setCurrentTime() {
-            const now = new Date();
-            const hours = now.getHours().toString().padStart(2, '0');
-            const minutes = now.getMinutes().toString().padStart(2, '0');
-            
-            document.getElementById('wakeupHour').value = hours;
-            document.getElementById('wakeupMinute').value = minutes;
-        }
-
-        // Display wake-up records
-        function displayRecords() {
-            if (!records || records.length === 0) {
-                recordsList.innerHTML = '<p class="text-gray-500 text-center py-8">Henüz kayıt bulunmuyor</p>';
+        function setupNotificationPermission() {
+            if (!("Notification" in window)) {
+                permissionDiv.innerHTML = '<p class="text-red-700 font-semibold">Bu tarayıcı bildirimleri desteklemiyor.</p>';
                 return;
             }
-            
-            const validRecords = records.filter(record => record && record.hour !== undefined && record.minute !== undefined);
-            
-            if (validRecords.length === 0) {
-                recordsList.innerHTML = '<p class="text-gray-500 text-center py-8">Henüz kayıt bulunmuyor</p>';
-                return;
-            }
-            
-            recordsList.innerHTML = '';
-            
-            const record = validRecords[0];
-            const card = document.createElement('div');
-            card.className = 'bg-gray-50 rounded-lg p-4 mb-4';
-            
-            const recordTime = `${record.hour?.toString().padStart(2, '0') || '00'}:${record.minute?.toString().padStart(2, '0') || '00'}`;
-            const recordDate = record.timestamp ? new Date(record.timestamp).toLocaleString('tr-TR') : new Date().toLocaleString('tr-TR');
-            
-            card.innerHTML = `
-                <div class="flex justify-between items-center">
-                    <div>
-                        <p class="text-indigo-600">Uyanma: <span class="font-bold">${recordTime}</span></p>
-                        <p class="text-xs text-gray-500">${recordDate}</p>
-                    </div>
-                    <button onclick="deleteRecord(${record.id || 0})" 
-                            class="bg-red-500 hover:bg-red-600 text-white p-2 rounded">
-                        <i class="fas fa-trash"></i>
-                    </button>
-                </div>
-            `;
-            
-            recordsList.appendChild(card);
-        }
-
-        // Kayıt silme
-        function deleteRecord(id) {
-            if (confirm('Bu kaydı silmek istediğinizden emin misiniz?')) {
-                records = records.filter(record => record && record.id !== id);
-                saveRecords();
-                displayRecords();
-                updateTimeDifference();
+            if (Notification.permission === 'granted') {
+                permissionDiv.classList.add('hidden');
+            } else {
+                permissionDiv.classList.remove('hidden');
             }
         }
 
-        // Update time difference since last wake-up
-        function updateTimeDifference() {
-            if (!records || records.length === 0) {
-                timeDiffText.textContent = '--';
-                warningMessage.classList.add('hidden');
-                return;
-            }
-            
-            const latestRecord = records[0];
-            if (!latestRecord || latestRecord.hour === undefined || latestRecord.minute === undefined) {
-                timeDiffText.textContent = '--';
-                warningMessage.classList.add('hidden');
-                return;
-            }
-            
-            const wakeUp = new Date();
-            wakeUp.setHours(latestRecord.hour, latestRecord.minute, 0, 0);
-            
-            const now = new Date();
-            const diffMs = now - wakeUp;
-            
-            if (diffMs >= 0) {
-                const totalMinutes = Math.floor(diffMs / (1000 * 60));
-                const hours = Math.floor(totalMinutes / 60);
-                const minutes = totalMinutes % 60;
-                
-                timeDiffText.textContent = `${hours} saat ${minutes} dakika oldu`;
-                
-                const threshold = 180; // 3 saat
-                
-                if (totalMinutes >= threshold) {
-                    warningMessage.classList.remove('hidden');
-                } else {
-                    warningMessage.classList.add('hidden');
+        function askForNotificationPermission() {
+            Notification.requestPermission().then(permission => {
+                if (permission === 'granted') {
+                    permissionDiv.classList.add('hidden');
+                    new Notification("Teşekkürler! 💖", {
+                        body: "Bildirimler başarıyla etkinleştirildi.",
+                        icon: "https://img.icons8.com/color/48/000000/filled-like.png"
+                    });
                 }
-            }
+            });
         }
 
-        // Save wake-up record and notify server
-        async function saveRecord() {
-            const hour = parseInt(document.getElementById('wakeupHour').value);
-            const minute = parseInt(document.getElementById('wakeupMinute').value);
+        function showNotification() {
+            const notification = new Notification("⏰ Uyku Zamanı!", {
+                body: "Ecrin, uyku zamanı geldi! 😴 Hadi yatağa! 💖",
+                icon: "https://img.icons8.com/color/48/000000/sleeping-in-bed.png",
+                requireInteraction: true // Kullanıcı kapatana kadar bildirim kalır
+            });
 
-            if (isNaN(hour) || isNaN(minute) || hour < 0 || hour > 23 || minute < 0 > 59) {
+            alarmSound.play();
+
+            // Bildirime tıklandığında alarmı durdur ve sekmeye odaklan
+            notification.onclick = () => {
+                alarmSound.pause();
+                alarmSound.currentTime = 0;
+                window.focus();
+                notification.close();
+            };
+        }
+
+        // -- Kayıt ve Zamanlama Fonksiyonları --
+
+        function handleFormSubmit(e) {
+            e.preventDefault();
+
+            if (Notification.permission !== 'granted') {
+                alert("Lütfen önce bildirimlere izin verin.");
+                askForNotificationPermission();
+                return;
+            }
+
+            saveRecord();
+        }
+
+        function saveRecord() {
+            const hour = parseInt(wakeupHourInput.value);
+            const minute = parseInt(wakeupMinuteInput.value);
+
+            if (isNaN(hour) || isNaN(minute) || hour < 0 || hour > 23 || minute < 0 || minute > 59) {
                 alert('Lütfen geçerli bir saat girin (Saat: 0-23, Dakika: 0-59)');
                 return;
             }
@@ -244,38 +208,112 @@
                 timestamp: new Date().toISOString()
             };
 
-            records = [newRecord];
-            saveRecords();
+            records = [newRecord]; // Sadece son kaydı tut
+            localStorage.setItem(RECORDS_STORAGE_KEY, JSON.stringify(records));
 
-            // Notify the server to schedule a notification
-            try {
-                const isDevMode = document.getElementById('devMode').checked;
-                const response = await fetch('/notify', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ devMode: isDevMode }),
-                });
+            // Formu temizle
+            wakeupHourInput.value = '';
+            wakeupMinuteInput.value = '';
 
-                if (!response.ok) {
-                    throw new Error('Sunucuya bildirim isteği gönderilemedi.');
-                }
+            displayRecords();
+            updateTimeDifference();
 
-                const result = await response.json();
-                console.log('Server response:', result.message);
-                alert('Kaydedildi ve hatırlatıcı kuruldu! 💖');
+            // Alarmı kur
+            setAlarm();
+        }
 
-            } catch (error) {
-                console.error('Hata:', error);
-                alert('Kaydedildi ancak hatırlatıcı kurulamadı. Lütfen sunucu bağlantısını kontrol edin.');
-            } finally {
-                // Clear form
-                document.getElementById('wakeupHour').value = '';
-                document.getElementById('wakeupMinute').value = '';
+        function setAlarm() {
+            // Mevcut alarmı iptal et
+            if (alarmTimeoutId) {
+                clearTimeout(alarmTimeoutId);
+                console.log("Mevcut alarm iptal edildi.");
+            }
 
-                displayRecords();
-                updateTimeDifference();
+            const isDevMode = devModeCheckbox.checked;
+            const delayMinutes = isDevMode ? 2 : 180; // 2 dakika veya 3 saat
+            const delayMilliseconds = delayMinutes * 60 * 1000;
+
+            alarmTimeoutId = setTimeout(showNotification, delayMilliseconds);
+
+            const alarmTime = new Date(Date.now() + delayMilliseconds);
+            alert(`Alarm kuruldu! 💖\n\nBildirim ${alarmTime.toLocaleTimeString('tr-TR')} saatinde gelecek.`);
+            console.log(`Alarm ${delayMinutes} dakika sonrasına kuruldu.`);
+        }
+
+        // -- Veri Yükleme/Kaydetme Fonksiyonları --
+
+        function loadRecords() {
+            const stored = localStorage.getItem(RECORDS_STORAGE_KEY);
+            records = stored ? JSON.parse(stored) : [];
+        }
+
+        function loadDevMode() {
+            const savedDevMode = localStorage.getItem(DEV_MODE_KEY);
+            if (savedDevMode !== null) {
+                devModeCheckbox.checked = JSON.parse(savedDevMode);
+            }
+        }
+
+        function saveDevMode() {
+            localStorage.setItem(DEV_MODE_KEY, devModeCheckbox.checked);
+        }
+
+        // -- Arayüz Güncelleme Fonksiyonları --
+
+        function setCurrentTime() {
+            const now = new Date();
+            wakeupHourInput.value = now.getHours().toString().padStart(2, '0');
+            wakeupMinuteInput.value = now.getMinutes().toString().padStart(2, '0');
+        }
+
+        function displayRecords() {
+            if (!records || records.length === 0) {
+                recordsList.innerHTML = '<p class="text-gray-500 text-center py-8">Henüz kayıt bulunmuyor</p>';
+                return;
+            }
+            
+            const record = records[0];
+            const card = document.createElement('div');
+            card.className = 'bg-gray-50 rounded-lg p-4';
+            
+            const recordTime = `${record.hour.toString().padStart(2, '0')}:${record.minute.toString().padStart(2, '0')}`;
+            const recordDate = new Date(record.timestamp).toLocaleString('tr-TR');
+            
+            card.innerHTML = `
+                <div class="flex justify-between items-center">
+                    <div>
+                        <p class="text-indigo-600">Son Uyanma: <span class="font-bold">${recordTime}</span></p>
+                        <p class="text-xs text-gray-500">${recordDate}</p>
+                    </div>
+                </div>
+            `;
+            recordsList.innerHTML = ''; // Önceki kayıtları temizle
+            recordsList.appendChild(card);
+        }
+
+        function updateTimeDifference() {
+            if (!records || records.length === 0) {
+                timeDiffText.textContent = '--';
+                warningMessage.classList.add('hidden');
+                return;
+            }
+            
+            const latestRecord = records[0];
+            const wakeUp = new Date(latestRecord.timestamp);
+            const now = new Date();
+            const diffMs = now - wakeUp;
+            
+            const totalMinutes = Math.floor(diffMs / (1000 * 60));
+            const hours = Math.floor(totalMinutes / 60);
+            const minutes = totalMinutes % 60;
+
+            timeDiffText.textContent = `${hours} saat ${minutes} dakika oldu`;
+
+            const threshold = isDevMode.checked ? 2 : 180;
+            if (totalMinutes >= threshold) {
+                warningMessage.classList.remove('hidden');
+            } else {
+                warningMessage.classList.add('hidden');
             }
         }
     </script>
