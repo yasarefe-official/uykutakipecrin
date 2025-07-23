@@ -17,9 +17,11 @@ scheduler = BackgroundScheduler(daemon=True)
 
 def send_notification():
     """ntfy.sh'e bildirim gönderir."""
+    notification_url = f"https://ntfy.sh/{NTFY_TOPIC}"
+    logging.info(f"Bildirim gönderilmeye çalışılıyor: URL={notification_url}")
     try:
-        requests.post(
-            f"https://ntfy.sh/{NTFY_TOPIC}",
+        response = requests.post(
+            notification_url,
             data="Ecrin, uyku zamanı geldi! 😴 Hadi yatağa! 💖".encode('utf-8'),
             headers={
                 "Title": "Uyku Zamanı Hatırlatıcısı",
@@ -27,9 +29,16 @@ def send_notification():
                 "Tags": "bed,moon"
             }
         )
-        logging.info(f"'{NTFY_TOPIC}' konusuna bildirim gönderildi.")
+        # Sunucudan gelen yanıtı logla
+        logging.info(
+            f"'{NTFY_TOPIC}' konusuna bildirim gönderildi. "
+            f"Durum Kodu: {response.status_code}, Yanıt: {response.text}"
+        )
+        response.raise_for_status()  # HTTP 2xx dışında bir kod varsa hata fırlat
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Bildirim gönderilirken ağ hatası oluştu: {e}")
     except Exception as e:
-        logging.error(f"Bildirim gönderilemedi: {e}")
+        logging.error(f"Bildirim gönderilirken beklenmedik bir hata oluştu: {e}")
 
 @app.route('/')
 def index():
