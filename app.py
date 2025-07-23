@@ -3,6 +3,7 @@ import requests
 from apscheduler.schedulers.background import BackgroundScheduler
 import logging
 import os
+from datetime import datetime, timedelta
 
 # Set up basic logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -60,17 +61,18 @@ def notify():
             job.remove()
             logging.info("Mevcut bildirim görevi iptal edildi.")
 
-    # Yeni bildirim görevini zamanla
+    # Yeni bildirim görevini 'date' tetikleyicisi ile zamanla
+    run_date = datetime.now() + timedelta(minutes=delay_minutes)
     scheduler.add_job(
         send_notification,
-        'interval',
-        minutes=delay_minutes,
+        trigger='date',
+        run_date=run_date,
         id='timed_notification',
         name='send_notification',
         replace_existing=True
     )
 
-    logging.info(f"Bildirim {delay_minutes} dakika sonrasına zamanlandı.")
+    logging.info(f"Bildirim, çalışmak üzere {run_date.strftime('%Y-%m-%d %H:%M:%S')} tarihine zamanlandı.")
     return {"status": "success", "message": f"Notification scheduled in {delay_minutes} minutes."}, 200
 
 def keep_alive():
