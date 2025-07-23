@@ -92,9 +92,21 @@
         const recordsList = document.getElementById('recordsList');
         const warningMessage = document.getElementById('warningMessage');
         const timeDiffText = document.getElementById('timeDiffText');
+        const devModeCheckbox = document.getElementById('devMode');
 
-        // Sayfa yüklendiğinde kayıtları yükle
+        // LocalStorage'den ayarları yükle ve olayları bağla
         document.addEventListener('DOMContentLoaded', () => {
+            // Geliştirici modu durumunu yükle
+            const savedDevMode = localStorage.getItem('devMode');
+            if (savedDevMode !== null) {
+                devModeCheckbox.checked = JSON.parse(savedDevMode);
+            }
+
+            // Geliştirici modu durumunu kaydet
+            devModeCheckbox.addEventListener('change', () => {
+                localStorage.setItem('devMode', devModeCheckbox.checked);
+            });
+
             loadRecords();
             displayRecords();
             updateTimeDifference();
