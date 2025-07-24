@@ -54,6 +54,12 @@ def send_push_notification(subscription_info, message_body):
             push_subscription = None
 
 # -- Route'lar (Endpoints) --
+@app.after_request
+def add_security_headers(response):
+    """Tarayıcı kısıtlamalarını önlemek için gerekli güvenlik başlıklarını ekle."""
+    response.headers['Permissions-Policy'] = 'notifications=*'
+    return response
+
 @app.route('/')
 def index():
     return render_template('index.html', vapid_public_key=VAPID_PUBLIC_KEY)
