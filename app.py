@@ -1,16 +1,10 @@
-from flask import Flask, request, render_template
-from datetime import datetime, timedelta
-import threading, time, requests
+from flask import Flask, request, render_template, jsonify
+from datetime import datetime
 import pytz
 
 app = Flask(__name__, template_folder='templates')
 
-# Sunucu her yeniden başladığında sıfırlanacak global değişkenler
-son_uyanis_verisi = {
-    "zaman": None,
-    "dev_mode": False
-}
-
+# Saat dilimini ayarla
 trtz = pytz.timezone("Europe/Istanbul")
 
 @app.route("/")
@@ -19,46 +13,17 @@ def index():
 
 @app.route("/api/uyandi", methods=["POST"])
 def uyandi():
-    global son_uyanis_verisi
-    data = request.get_json()
+    try:
+        data = request.get_json()
+        # Gelen ISO formatındaki saati alıp Türkiye saat dilimine çeviriyoruz
+        uyanis_saati_str = data["saat"]
+        uyanis_saati = datetime.fromisoformat(uyanis_saati_str.replace('Z', '+00:00')).astimezone(trtz)
 
-    son_uyanis_verisi["zaman"] = datetime.fromisoformat(data["saat"]).astimezone(trtz)
-    son_uyanis_verisi["dev_mode"] = data.get("devMode", False)
+        # Burada normalde bu veriyi bir veritabanına kaydedersiniz.
+        # Bu örnekte sadece konsola yazdırıyoruz.
+        print(f"Uyanış saati başarıyla kaydedildi: {uyanis_saati.strftime('%Y-%m-%d %H:%M:%S')}")
 
-    mod = "Geliştirici" if son_uyanis_verisi["dev_mode"] else "Normal"
-    print(f"Uyanış saati kaydedildi ({mod} Mod): {son_uyanis_verisi['zaman']}")
-
-    return {"ok": True}
-
-def kontrol_et():
-    global son_uyanis_verisi
-    while True:
-        time.sleep(60) # Her dakika kontrol et
-
-        if not son_uyanis_verisi["zaman"]:
-            continue
-
-        simdi = datetime.now(trtz)
-        fark = simdi - son_uyanis_verisi["zaman"]
-
-        bekleme_suresi = timedelta(minutes=2) if son_uyanis_verisi["dev_mode"] else timedelta(hours=3)
-        mod = "Geliştirici (2dk)" if son_uyanis_verisi["dev_mode"] else "Normal (3sa)"
-
-        print(f"Kontrol ediliyor ({mod})... Son uyanış: {son_uyanis_verisi['zaman']}, Fark: {fark.total_seconds():.0f}s")
-
-        if fark > bekleme_suresi:
-            print(f"{mod} süresi doldu, bildirim gönderiliyor...")
-            try:
-                mesaj = f"💕 {int(bekleme_suresi.total_seconds() / 60)} dakikadır uyanıksın Ecrin... biraz dinlensen mi aşkım?"
-                requests.post("https://ntfy.sh/ecrin", data=mesaj.encode('utf-8'))
-                print("Bildirim gönderildi.")
-            except Exception as e:
-                print(f"Bildirim gönderilemedi: {e}")
-            finally:
-                # Bildirim gönderildikten sonra zamanı sıfırla
-                son_uyanis_verisi["zaman"] = None
-                son_uyanis_verisi["dev_mode"] = False
-
-
-# Arka plan görevini başlat
-threading.Thread(target=kontrol_et, daemon=True).start()
+        return jsonify({"ok": True}), 200
+    except Exception as e:
+        print(f"Hata oluştu: {e}")
+        return jsonify({"ok": False, "error": "Geçersiz veri"}), 400
