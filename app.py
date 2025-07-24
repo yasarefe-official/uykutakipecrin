@@ -62,7 +62,7 @@ def add_security_headers(response):
 
 @app.route('/')
 def index():
-    return render_template('index.html', vapid_public_key=VAPID_PUBLIC_KEY)
+    return render_template('index.html', vapid_public_key=str(VAPID_PUBLIC_KEY))
 
 @app.route('/service-worker.js')
 def service_worker():

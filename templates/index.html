@@ -93,76 +93,78 @@
 
         // 1. Sayfa yüklendiğinde Service Worker'ı kaydet ve arayüzü hazırla.
         async function main() {
+            askPermissionBtn.disabled = true; // Butonu başlangıçta devre dışı bırak
+
             if (!('serviceWorker' in navigator && 'PushManager' in window)) {
                 permissionContent.innerHTML = '<p class="text-red-700 font-semibold">Push bildirimleri bu tarayıcıda desteklenmiyor.</p>';
                 return;
             }
+             if (!VAPID_PUBLIC_KEY || VAPID_PUBLIC_KEY === 'None') {
+                permissionContent.innerHTML = '<p class="text-red-700 font-semibold">Uygulama yapılandırması eksik (VAPID anahtarı bulunamadı).</p>';
+                console.error("VAPID public key eksik veya geçersiz:", VAPID_PUBLIC_KEY);
+                return;
+            }
 
             try {
-                await navigator.serviceWorker.register('/service-worker.js');
+                const registration = await navigator.serviceWorker.register('/service-worker.js');
                 console.log('Service Worker başarıyla kaydedildi.');
 
-                // Mevcut abonelik durumuna göre arayüzü güncelle
-                const registration = await navigator.serviceWorker.ready;
+                // Service worker aktif olana kadar bekle
+                await navigator.serviceWorker.ready;
+                console.log('Service Worker aktif.');
+
                 const subscription = await registration.pushManager.getSubscription();
                 if (subscription) {
+                    console.log('Kullanıcı zaten abone.', subscription);
                     permissionDiv.classList.add('hidden');
                 } else {
+                    console.log('Kullanıcı abone değil.');
                     permissionDiv.classList.remove('hidden');
+                    askPermissionBtn.disabled = false; // Butonu etkinleştir
                 }
             } catch (error) {
-                console.error('Service Worker kurulumu sırasında hata:', error);
-                permissionContent.innerHTML = '<p class="text-red-700 font-semibold">Uygulama başlatılamadı.</p>';
+                console.error('Service Worker kurulumu veya abonelik kontrolü sırasında hata:', error);
+                permissionContent.innerHTML = `<p class="text-red-700 font-semibold">Uygulama başlatılamadı: ${error.message}</p>`;
             }
         }
+
 
         // 2. Kullanıcı butona bastığında tüm abonelik işlemini başlat.
         async function subscribeUser() {
             askPermissionBtn.disabled = true;
             askPermissionBtn.textContent = 'İşleniyor...';
+            console.log('Abonelik işlemi başlatıldı.');
 
             try {
-                // Adım 1: Bildirim izni iste (Promise tabanlı)
-                const permission = await Notification.requestPermission();
-                if (permission !== 'granted') {
-                    throw new Error('Bildirim izni verilmedi.');
-                }
-                console.log('Bildirim izni verildi.');
-
-                // Adım 2: Service Worker'ın aktif olmasını bekle
                 const registration = await navigator.serviceWorker.ready;
-                console.log('Service Worker aktif.', registration);
+                console.log('Service Worker abonelik için hazır.');
 
-                // Adım 3: Mevcut aboneliği kontrol et
-                let subscription = await registration.pushManager.getSubscription();
-                if (subscription) {
-                    console.log('Mevcut abonelik bulundu.', subscription);
-                } else {
-                    // Adım 4: Yeni abonelik oluştur
-                    console.log('Yeni abonelik oluşturuluyor...');
-                    const convertedVapidKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
-                    subscription = await registration.pushManager.subscribe({
-                        userVisibleOnly: true,
-                        applicationServerKey: convertedVapidKey
-                    });
-                    console.log('Yeni abonelik başarıyla oluşturuldu.', subscription);
-                }
+                const convertedVapidKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
+                console.log('VAPID public key dönüştürüldü.');
 
-                // Adım 5: Aboneliği sunucuya gönder
+                const subscription = await registration.pushManager.subscribe({
+                    userVisibleOnly: true,
+                    applicationServerKey: convertedVapidKey
+                });
+                console.log('Yeni abonelik başarıyla oluşturuldu:', subscription);
+
                 await sendSubscriptionToServer(subscription);
+                console.log('Abonelik sunucuya başarıyla gönderildi.');
 
                 permissionDiv.classList.add('hidden');
                 alert('Bildirimler başarıyla etkinleştirildi! 💖');
 
             } catch (error) {
-                console.error('Abonelik işlemi başarısız:', error);
-                let userMessage = `Bildirimler etkinleştirilemedi: ${error.message}\n\nLütfen tarayıcı ayarlarınızı kontrol edip tekrar deneyin.`;
+                console.error('Abonelik işlemi başarısız oldu:', error);
+                let userMessage = `Bildirimler etkinleştirilemedi. Hata: ${error.message}`;
                 if (error.name === 'NotAllowedError') {
-                    userMessage = 'Bildirim izni engellendi. Lütfen site ayarlarından bildirimlere izin verin.';
+                    userMessage = 'Bildirim izni vermeyi reddettiniz. Bildirimleri almak istiyorsanız, lütfen tarayıcı ayarlarından site izinlerini sıfırlayıp tekrar deneyin.';
+                } else if (error.name === 'InvalidStateError') {
+                    userMessage = 'Geçersiz bir durum oluştu. Service worker aktif olmayabilir. Sayfayı yenileyip tekrar deneyin.';
                 }
                 alert(userMessage);
-            } finally {
                 askPermissionBtn.disabled = false;
+            } finally {
                 askPermissionBtn.textContent = 'İzin Ver ve Etkinleştir';
             }
         }
