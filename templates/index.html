@@ -10,59 +10,73 @@
     <div class="container mx-auto px-4 py-8 max-w-md text-center">
         <header class="mb-8">
             <h1 class="text-4xl font-bold text-indigo-700 mb-2">Ecrin'in Uyku Takibi</h1>
-            <p class="text-gray-600">3 saat uyanık kaldığında haber vereceğim 🌙</p>
+            <p class="text-gray-600">Ne zaman uyandığını not edelim 🌙</p>
         </header>
 
         <div class="bg-white rounded-2xl shadow-lg p-6 md:p-8">
-            <div class="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                <label class="flex items-center justify-center">
-                    <input type="checkbox" id="devMode" class="mr-2 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded">
-                    <span class="text-yellow-800 font-semibold">🔧 Geliştirici Modu (2 dk test)</span>
-                </label>
-            </div>
+            <form id="sleepForm">
+                <div class="mb-6">
+                    <label for="wakeupTime" class="block text-sm font-medium text-gray-700 mb-2">Uyanma Saati</label>
+                    <input type="time" id="wakeupTime" name="wakeupTime" required
+                           class="p-3 w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-center">
+                </div>
 
-            <button id="uyandimBtn"
-                    class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-4 px-4 rounded-lg transition duration-300 text-lg">
-                <i class="fas fa-sun mr-2"></i>Ben Uyandım!
-            </button>
+                <button type="submit" id="kaydetBtn"
+                        class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition duration-300">
+                    <i class="fas fa-save mr-2"></i>Kaydet
+                </button>
+            </form>
         </div>
     </div>
 
     <script>
-        const uyandimBtn = document.getElementById('uyandimBtn');
-        const devModeCheckbox = document.getElementById('devMode');
+        // Form gönderildiğinde çalışacak fonksiyon
+        document.getElementById('sleepForm').addEventListener('submit', function(event) {
+            event.preventDefault(); // Formun varsayılan gönderimini engelle
 
-        uyandimBtn.addEventListener('click', () => {
-            uyandimBtn.disabled = true;
-            uyandimBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>İşleniyor...';
+            const kaydetBtn = document.getElementById('kaydetBtn');
+            kaydetBtn.disabled = true;
+            kaydetBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Kaydediliyor...';
 
-            const isDevMode = devModeCheckbox.checked;
+            const wakeupTime = document.getElementById('wakeupTime').value;
+            const today = new Date();
+            const [hours, minutes] = wakeupTime.split(':');
+            today.setHours(hours);
+            today.setMinutes(minutes);
+            today.setSeconds(0);
 
             fetch("/api/uyandi", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    saat: new Date().toISOString(),
-                    devMode: isDevMode
-                })
+                body: JSON.stringify({ saat: today.toISOString() })
             })
             .then(response => response.json())
             .then(data => {
                 if(data.ok) {
-                    alert("Uyandığın not edildi aşkım 😌 Alarmın " + (isDevMode ? "2 dakika" : "3 saat") + " sonrasına kuruldu.");
+                    alert("Uyanma saatin (" + wakeupTime + ") başarıyla kaydedildi! 💖");
                 } else {
-                    alert("Bir hata oluştu, tekrar dener misin?");
+                    alert("Bir hata oluştu, lütfen tekrar deneyin.");
                 }
             })
             .catch(error => {
                 console.error("Hata:", error);
-                alert("Sunucuya ulaşılamadı.");
+                alert("Sunucuya ulaşılamadı. Lütfen internet bağlantınızı kontrol edin.");
             })
             .finally(() => {
-                uyandimBtn.disabled = false;
-                uyandimBtn.innerHTML = '<i class="fas fa-sun mr-2"></i>Ben Uyandım!';
+                kaydetBtn.disabled = false;
+                kaydetBtn.innerHTML = '<i class="fas fa-save mr-2"></i>Kaydet';
             });
         });
+
+        // Sayfa yüklendiğinde mevcut saati input'a ata
+        function setCurrentTime() {
+            const now = new Date();
+            const hours = now.getHours().toString().padStart(2, '0');
+            const minutes = now.getMinutes().toString().padStart(2, '0');
+            document.getElementById('wakeupTime').value = `${hours}:${minutes}`;
+        }
+
+        window.onload = setCurrentTime;
     </script>
 </body>
 </html>
