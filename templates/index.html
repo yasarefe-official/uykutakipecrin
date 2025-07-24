@@ -91,58 +91,75 @@
         }
 
         // -- Ana Mantık --
+
+        // 1. Sayfa yüklendiğinde Service Worker'ı kaydet ve arayüzü hazırla.
         async function main() {
             if (!('serviceWorker' in navigator && 'PushManager' in window)) {
                 permissionContent.innerHTML = '<p class="text-red-700 font-semibold">Push bildirimleri bu tarayıcıda desteklenmiyor.</p>';
                 return;
             }
 
-            // Service Worker'ı kaydet
             try {
-                const registration = await navigator.serviceWorker.register('/service-worker.js');
-                console.log('Service Worker başarıyla kaydedildi.', registration);
-                checkSubscription(registration);
+                await navigator.serviceWorker.register('/service-worker.js');
+                console.log('Service Worker başarıyla kaydedildi.');
+
+                // Mevcut abonelik durumuna göre arayüzü güncelle
+                const registration = await navigator.serviceWorker.ready;
+                const subscription = await registration.pushManager.getSubscription();
+                if (subscription) {
+                    permissionDiv.classList.add('hidden');
+                } else {
+                    permissionDiv.classList.remove('hidden');
+                }
             } catch (error) {
-                console.error('Service Worker kaydedilemedi:', error);
+                console.error('Service Worker kurulumu sırasında hata:', error);
                 permissionContent.innerHTML = '<p class="text-red-700 font-semibold">Uygulama başlatılamadı.</p>';
             }
         }
 
-        async function checkSubscription(registration) {
-            const subscription = await registration.pushManager.getSubscription();
-            if (subscription) {
-                console.log('Kullanıcı zaten abone.', subscription);
-                permissionDiv.classList.add('hidden'); // Kullanıcı zaten aboneyse paneli gizle
-            } else {
-                console.log('Kullanıcı abone değil.');
-                permissionDiv.classList.remove('hidden'); // Abone değilse paneli göster
-            }
-        }
-
+        // 2. Kullanıcı butona bastığında tüm abonelik işlemini başlat.
         async function subscribeUser() {
             askPermissionBtn.disabled = true;
+            askPermissionBtn.textContent = 'İşleniyor...';
+
             try {
+                // Adım 1: Bildirim izni iste
                 const permission = await Notification.requestPermission();
                 if (permission !== 'granted') {
                     throw new Error('Bildirim izni verilmedi.');
                 }
+                console.log('Bildirim izni verildi.');
 
+                // Adım 2: Service Worker'ın aktif olmasını bekle
                 const registration = await navigator.serviceWorker.ready;
-                const subscription = await registration.pushManager.subscribe({
-                    userVisibleOnly: true,
-                    applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
-                });
+                console.log('Service Worker aktif.', registration);
 
-                console.log('Yeni abonelik oluşturuldu:', subscription);
+                // Adım 3: Mevcut aboneliği kontrol et
+                let subscription = await registration.pushManager.getSubscription();
+                if (subscription) {
+                    console.log('Mevcut abonelik bulundu.', subscription);
+                } else {
+                    // Adım 4: Yeni abonelik oluştur
+                    console.log('Yeni abonelik oluşturuluyor...');
+                    subscription = await registration.pushManager.subscribe({
+                        userVisibleOnly: true,
+                        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+                    });
+                    console.log('Yeni abonelik başarıyla oluşturuldu.', subscription);
+                }
+
+                // Adım 5: Aboneliği sunucuya gönder
                 await sendSubscriptionToServer(subscription);
 
                 permissionDiv.classList.add('hidden');
                 alert('Bildirimler başarıyla etkinleştirildi! 💖');
 
             } catch (error) {
-                console.error('Abonelik oluşturulamadı:', error);
-                alert('Bildirimler etkinleştirilemedi. Lütfen tarayıcı ayarlarınızı kontrol edin ve tekrar deneyin.');
+                console.error('Abonelik işlemi başarısız:', error);
+                alert(`Bildirimler etkinleştirilemedi: ${error.message}\n\nLütfen tarayıcı ayarlarınızı kontrol edip tekrar deneyin.`);
+            } finally {
                 askPermissionBtn.disabled = false;
+                askPermissionBtn.textContent = 'İzin Ver ve Etkinleştir';
             }
         }
 
