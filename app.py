@@ -22,9 +22,10 @@ VAPID_CLAIMS = {"sub": "mailto:your-email@example.com"} # Burayı kendi e-postan
 if not VAPID_PRIVATE_KEY or not VAPID_PUBLIC_KEY:
     logging.warning("VAPID anahtarları ortam değişkenlerinde bulunamadı. Yeni anahtarlar oluşturuluyor.")
     logging.warning("LÜTFEN BU ANAHTARLARI KOPYALAYIP RENDER ORTAM DEĞİŞKENLERİNE EKLEYİN.")
-    vapid_keys = Vapid.generate()
-    VAPID_PRIVATE_KEY = vapid_keys.private_key
-    VAPID_PUBLIC_KEY = vapid_keys.public_key
+    vapid = Vapid()
+    vapid_keys = vapid.generate_keys()
+    VAPID_PRIVATE_KEY = vapid_keys["private_key"]
+    VAPID_PUBLIC_KEY = vapid_keys["public_key"]
     logging.warning(f"VAPID_PRIVATE_KEY={VAPID_PRIVATE_KEY}")
     logging.warning(f"VAPID_PUBLIC_KEY={VAPID_PUBLIC_KEY}")
 
